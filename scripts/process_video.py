@@ -53,7 +53,8 @@ def generate_ffmpeg_command(scenes, character_video_path, script_audio_path):
     
     # Inputs
     if Path(character_video_path).exists():
-        input_args.extend(["-i", character_video_path]) # [0:v]
+        # -stream_loop -1 ensures the 5s video loops continuously for the entire video duration
+        input_args.extend(["-stream_loop", "-1", "-i", character_video_path]) # [0:v]
     if Path(script_audio_path).exists():
         input_args.extend(["-i", script_audio_path]) # [1:a]
 
