@@ -6,9 +6,8 @@ on:
       - 'script.txt'
   workflow_dispatch:
   schedule:
-    # Runs at 00:00 Pacific Time (which is 07:00 UTC) every day
-    # This ensures the daily quota resets before the workflow runs
-    - cron: '0 7 * * *'
+    # Runs at 17:00 UTC (1:00 PM EST) - Peak time for USA/High RPM countries
+    - cron: '0 17 * * *'
 
 jobs:
   build-and-upload:
@@ -20,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11' # Upgraded for better performance
 
       - name: Install dependencies
         run: |
@@ -40,5 +39,5 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          MAX_DAILY_UPLOADS: 6 # Set a safe daily upload limit
+          MAX_DAILY_UPLOADS: 3 # Reduced for higher quality focus
         run: python scripts/youtube_upload.py
