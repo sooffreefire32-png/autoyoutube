@@ -72,7 +72,7 @@ def upload_video():
 
     media_body = MediaFileUpload(video_file)
 
-    print(f"Uploading video: {request_body["snippet"]["title"]}")
+    print(f"Uploading video: {request_body['snippet']['title']}")
     try:
         response = youtube.videos().insert(
             part="snippet,status",
