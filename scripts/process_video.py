@@ -38,40 +38,34 @@ def main():
     audio_path = Path("assets/script.mp3")
     char_path = Path("assets/character.mp4")
     
-    # Use prompts.txt if exists, otherwise fallback to script.txt
     if prompts_path.exists():
         with open(prompts_path, "r", encoding="utf-8") as f:
             prompts = [line.strip() for line in f.readlines() if line.strip()]
-        print(f"Loaded {len(prompts)} prompts from prompts.txt")
     elif script_path.exists():
         with open(script_path, "r", encoding="utf-8") as f:
             script_text = f.read()
-        # Simple split for fallback
-        prompts = [f"Cinematic mystery scene: {script_text[:100]}"] * 20
+        prompts = [f"Cinematic mystery scene: {script_text[:100]}"] * 50
     else:
-        print("No prompts.txt or script.txt found.")
         return
     
     total_duration = get_audio_duration(str(audio_path))
     scene_duration = total_duration / len(prompts)
     os.makedirs("output_images", exist_ok=True)
 
-    # Generate images from user prompts
     for i, prompt in enumerate(prompts):
         img_path = Path("output_images") / f"prompt_scene_{i+1}.png"
         generate_image(prompt, str(img_path))
 
+    # To avoid "Expressions with frame variables are not valid in init eval_mode" error,
+    # we use a more robust way to handle scaling and overlay.
+    
     filter_complex = []
     input_args = []
     
-    # 1. Character Video [0:v]
     if char_path.exists():
-        input_args.extend(["-stream_loop", "-1", "-i", str(char_path)])
-    
-    # 2. Audio [1:a]
-    input_args.extend(["-i", str(audio_path)])
+        input_args.extend(["-stream_loop", "-1", "-i", str(char_path)]) # [0:v]
+    input_args.extend(["-i", str(audio_path)]) # [1:a]
 
-    # 3. Image Inputs
     image_streams = []
     start_idx = 2
     for i in range(len(prompts)):
@@ -79,18 +73,21 @@ def main():
         if img_path.exists():
             input_args.extend(["-loop", "1", "-t", str(scene_duration), "-i", str(img_path)])
             idx = start_idx + i
-            # Cinematic Zoom/Pan
-            filter_complex.append(f"[{idx}:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,zoompan=z='min(zoom+0.001,1.3)':d={int(scene_duration*25)}:s=1920x1080[v{i}];")
+            # Basic Ken Burns without dynamic scale in filter_complex to avoid errors
+            filter_complex.append(f"[{idx}:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,zoompan=z='min(zoom+0.001,1.3)':d=125:s=1920x1080[v{i}];")
             image_streams.append(f"[v{i}]")
 
-    # Concatenate images
+    # Concat images
     filter_complex.append(f"{''.join(image_streams)}concat=n={len(image_streams)}:v=1:a=0[vmain];")
     
-    # Keyframe Animation for Character Video
+    # Character Animation: Full screen (0-5s), then shrink to corner
     if char_path.exists():
+        # Using a safer approach for dynamic scaling
         filter_complex.append(
-            f"[0:v]scale='if(lt(t,5),1920,if(lt(t,7),1920-(t-5)*(1920-450)/2,450))':-1[char];"
-            f"[vmain][char]overlay='if(lt(t,5),0,if(lt(t,7),(t-5)*(W-w-30)/2,W-w-30))':'if(lt(t,5),0,if(lt(t,7),(t-5)*(H-h-30)/2,H-h-30))'[vfinal];"
+            f"[0:v]scale=1920:1080[char_full];"
+            f"[0:v]scale=450:-1[char_small];"
+            f"[vmain][char_full]overlay=x=0:y=0:enable='between(t,0,5)'[vtemp];"
+            f"[vtemp][char_small]overlay=x=W-w-30:y=H-h-30:enable='gt(t,5)'[vfinal];"
         )
         v_map = "[vfinal]"
     else:
@@ -100,21 +97,21 @@ def main():
         "ffmpeg", "-y", *input_args,
         "-filter_complex", "".join(filter_complex),
         "-map", v_map, "-map", "1:a",
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
         "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", "final_video.mp4"
     ]
     
     try:
         subprocess.run(cmd, check=True)
-        print("Success: Prompt-based professional video generated.")
+        print("Success: Professional video generated.")
     except Exception as e:
         print(f"FFmpeg Failed: {e}")
 
     # Metadata
     metadata = {
-        "title": "EXCLUSIVE MYSTERY REVEALED (U.S. MYSTRIOUS)",
-        "description": "Custom prompt-driven cinematic experience. #Mystery #Documentary #USMystrious",
-        "tags": ["Mystery", "U.S. Mystrious", "Documentary"]
+        "title": "THE MYSTERY UNFOLDS: (U.S. MYSTRIOUS)",
+        "description": "Professional cinematic experience. #Mystery #USMystrious",
+        "tags": ["Mystery", "U.S. Mystrious"]
     }
     with open("video_metadata.json", "w") as f: json.dump(metadata, f)
 
